@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="AccessItEasy/AccessItEasy.csproj" />
+  <Project Path="AccessItEasy.Fody/AccessItEasy.Fody.csproj" />
+  <Project Path="AccessItEasy.Tests/AccessItEasy.Tests.csproj" />
+  <Project Path="AccessItEasy.Benchmarks/AccessItEasy.Benchmarks.csproj" />
+</Solution>
