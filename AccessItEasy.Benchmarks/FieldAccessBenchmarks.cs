@@ -27,6 +27,10 @@ public class FieldAccessBenchmarks
     private Func<BenchmarkFieldTarget, int> _ilGetter = null!;
     private Action<BenchmarkFieldTarget, int> _ilSetter = null!;
 
+    // IL Emit for ref return
+    private delegate ref int RefGetter(BenchmarkFieldTarget target);
+    private RefGetter _ilRefGetter = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -46,6 +50,7 @@ public class FieldAccessBenchmarks
         // Build IL emit getter/setter
         _ilGetter = BuildILGetter();
         _ilSetter = BuildILSetter();
+        _ilRefGetter = BuildILRefGetter();
     }
 
     #region PrivateAccessor
@@ -57,12 +62,19 @@ public class FieldAccessBenchmarks
     private static extern void SetValue(BenchmarkFieldTarget target, int value);
 
     [PrivateAccessor(PrivateAccessorKind.Field, Name = "_value")]
+    private static extern ref int GetValueRef(BenchmarkFieldTarget target);
+
+    [PrivateAccessor(PrivateAccessorKind.Field, Name = "_value")]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static extern int GetValueInlined(BenchmarkFieldTarget target);
 
     [PrivateAccessor(PrivateAccessorKind.Field, Name = "_value")]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static extern void SetValueInlined(BenchmarkFieldTarget target, int value);
+
+    [PrivateAccessor(PrivateAccessorKind.Field, Name = "_value")]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static extern ref int GetValueRefInlined(BenchmarkFieldTarget target);
 
     #endregion
 
@@ -94,6 +106,18 @@ public class FieldAccessBenchmarks
     }
 
     [Benchmark]
+    public int PrivateAccessor_Ref_Get()
+    {
+        return GetValueRef(_target);
+    }
+
+    [Benchmark]
+    public int PrivateAccessorInlined_Ref_Get()
+    {
+        return GetValueRefInlined(_target);
+    }
+
+    [Benchmark]
     public int UnsafeAccessor_Get()
     {
         return GetValueUnsafe(_target);
@@ -115,6 +139,12 @@ public class FieldAccessBenchmarks
     public int ILEmit_Get()
     {
         return _ilGetter(_target);
+    }
+
+    [Benchmark]
+    public int ILEmit_Ref_Get()
+    {
+        return _ilRefGetter(_target);
     }
 
     [Benchmark]
@@ -146,6 +176,18 @@ public class FieldAccessBenchmarks
     }
 
     [Benchmark]
+    public void PrivateAccessor_Ref_Set()
+    {
+        GetValueRef(_target) = 123;
+    }
+
+    [Benchmark]
+    public void PrivateAccessorInlined_Ref_Set()
+    {
+        GetValueRefInlined(_target) = 123;
+    }
+
+    [Benchmark]
     public void UnsafeAccessor_Set()
     {
         GetValueUnsafe(_target) = 123;
@@ -167,6 +209,12 @@ public class FieldAccessBenchmarks
     public void ILEmit_Set()
     {
         _ilSetter(_target, 123);
+    }
+
+    [Benchmark]
+    public void ILEmit_Ref_Set()
+    {
+        _ilRefGetter(_target) = 123;
     }
 
     [Benchmark]
@@ -228,6 +276,23 @@ public class FieldAccessBenchmarks
         il.Emit(OpCodes.Ret);
 
         return method.CreateDelegate<Action<BenchmarkFieldTarget, int>>();
+    }
+
+    private RefGetter BuildILRefGetter()
+    {
+        var method = new DynamicMethod(
+            "GetValueRef_IL",
+            typeof(int).MakeByRefType(),
+            [typeof(BenchmarkFieldTarget)],
+            typeof(FieldAccessBenchmarks).Module,
+            skipVisibility: true);
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, _fieldInfo);
+        il.Emit(OpCodes.Ret);
+
+        return method.CreateDelegate<RefGetter>();
     }
 
     #endregion

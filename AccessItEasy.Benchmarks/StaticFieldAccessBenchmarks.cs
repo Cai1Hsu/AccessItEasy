@@ -21,6 +21,10 @@ public class StaticFieldAccessBenchmarks
     private Func<int> _ilGetter = null!;
     private Action<int> _ilSetter = null!;
 
+    // IL Emit for ref return
+    private delegate ref int StaticRefGetter();
+    private StaticRefGetter _ilRefGetter = null!;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -36,6 +40,7 @@ public class StaticFieldAccessBenchmarks
         // Build IL emit getter/setter
         _ilGetter = BuildILGetter();
         _ilSetter = BuildILSetter();
+        _ilRefGetter = BuildILRefGetter();
     }
 
     #region PrivateAccessor
@@ -49,12 +54,19 @@ public class StaticFieldAccessBenchmarks
     private static extern void SetStaticValue([PrivateAccessorType(targetTypeName)] object? _, int value);
 
     [PrivateAccessor(PrivateAccessorKind.StaticField, Name = "_staticValue")]
+    private static extern ref int GetStaticValueRef([PrivateAccessorType(targetTypeName)] object? _);
+
+    [PrivateAccessor(PrivateAccessorKind.StaticField, Name = "_staticValue")]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static extern int GetStaticValueInlined([PrivateAccessorType(targetTypeName)] object? _);
 
     [PrivateAccessor(PrivateAccessorKind.StaticField, Name = "_staticValue")]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static extern void SetStaticValueInlined([PrivateAccessorType(targetTypeName)] object? _, int value);
+
+    [PrivateAccessor(PrivateAccessorKind.StaticField, Name = "_staticValue")]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static extern ref int GetStaticValueRefInlined([PrivateAccessorType(targetTypeName)] object? _);
 
     #endregion
 
@@ -86,6 +98,18 @@ public class StaticFieldAccessBenchmarks
     }
 
     [Benchmark]
+    public int PrivateAccessor_Ref_Get()
+    {
+        return GetStaticValueRef(null);
+    }
+
+    [Benchmark]
+    public int PrivateAccessorInlined_Ref_Get()
+    {
+        return GetStaticValueRefInlined(null);
+    }
+
+    [Benchmark]
     public int UnsafeAccessor_Get()
     {
         return GetStaticValueUnsafe(null);
@@ -107,6 +131,12 @@ public class StaticFieldAccessBenchmarks
     public int ILEmit_Get()
     {
         return _ilGetter();
+    }
+
+    [Benchmark]
+    public int ILEmit_Ref_Get()
+    {
+        return _ilRefGetter();
     }
 
     #endregion
@@ -132,6 +162,18 @@ public class StaticFieldAccessBenchmarks
     }
 
     [Benchmark]
+    public void PrivateAccessor_Ref_Set()
+    {
+        GetStaticValueRef(null) = 123;
+    }
+
+    [Benchmark]
+    public void PrivateAccessorInlined_Ref_Set()
+    {
+        GetStaticValueRefInlined(null) = 123;
+    }
+
+    [Benchmark]
     public void UnsafeAccessor_Set()
     {
         GetStaticValueUnsafe(null) = 123;
@@ -153,6 +195,12 @@ public class StaticFieldAccessBenchmarks
     public void ILEmit_Set()
     {
         _ilSetter(123);
+    }
+
+    [Benchmark]
+    public void ILEmit_Ref_Set()
+    {
+        _ilRefGetter() = 123;
     }
 
     #endregion
@@ -204,6 +252,22 @@ public class StaticFieldAccessBenchmarks
         il.Emit(OpCodes.Ret);
 
         return method.CreateDelegate<Action<int>>();
+    }
+
+    private StaticRefGetter BuildILRefGetter()
+    {
+        var method = new DynamicMethod(
+            "GetStaticValueRef_IL",
+            typeof(int).MakeByRefType(),
+            Type.EmptyTypes,
+            typeof(StaticFieldAccessBenchmarks).Module,
+            skipVisibility: true);
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldsflda, _fieldInfo);
+        il.Emit(OpCodes.Ret);
+
+        return method.CreateDelegate<StaticRefGetter>();
     }
 
     #endregion
