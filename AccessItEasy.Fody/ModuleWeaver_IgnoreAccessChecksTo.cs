@@ -36,8 +36,19 @@ public partial class ModuleWeaver
             TypeAttributes.Class | TypeAttributes.NotPublic | TypeAttributes.Sealed | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit,
             ModuleDefinition.ImportReference(typeof(Attribute)));
 
-        // Note: [AttributeUsage] is not strictly required for the attribute to work
-        // and adding it can cause resolution issues in some target frameworks
+        var attributeUsageCtor = typeof(AttributeUsageAttribute).GetConstructor(
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+            null,
+            new[] { typeof(AttributeTargets) },
+            null);
+        var attributeUsageCtorRef = ModuleDefinition.ImportReference(attributeUsageCtor);
+        var AttributeTargetsRef = ModuleDefinition.ImportReference(typeof(AttributeTargets));
+
+        // AttributeTargets type reference import fails in some cases, so we manually create it
+        // [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+        var blob = new byte[] { 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x54, 0x02, 0x0d, 0x41, 0x6c, 0x6c, 0x6f, 0x77, 0x4d, 0x75, 0x6c, 0x74, 0x69, 0x70, 0x6c, 0x65, 0x01 };
+
+        type.CustomAttributes.Add(new CustomAttribute(attributeUsageCtorRef, blob));
 
         var assemblyNameBackingField = new FieldDefinition("<AssemblyName>k__BackingField", FieldAttributes.Private | FieldAttributes.InitOnly, ModuleDefinition.TypeSystem.String);
 
