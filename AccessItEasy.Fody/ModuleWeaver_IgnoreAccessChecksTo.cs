@@ -33,7 +33,7 @@ public partial class ModuleWeaver
             "System.Runtime.CompilerServices",
             "IgnoresAccessChecksToAttribute",
             // private auto ansi sealed beforefieldinit
-            TypeAttributes.Class | TypeAttributes.NotPublic | TypeAttributes.Sealed | TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit,
+            TypeAttributes.Class | TypeAttributes.NotPublic | TypeAttributes.Sealed | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit,
             ModuleDefinition.ImportReference(typeof(Attribute)));
 
         // Note: [AttributeUsage] is not strictly required for the attribute to work
