@@ -66,8 +66,12 @@ public partial class ModuleWeaver
         // If the target type is a generic instance (e.g., Box<int>), we need to bind the constructor to that instance
         if (targetType is GenericInstanceType genericTargetType)
         {
+            // although constructor's return is expected to be void
+            // we still import here to avoid any potential type mismatches
+            var returnType = ModuleDefinition.ImportReference(constructor.ReturnType);
+
             // The declaring type should be the generic instance, not the definition
-            var ctorRef = new MethodReference(".ctor", constructor.ReturnType)
+            var ctorRef = new MethodReference(".ctor", returnType)
             {
                 DeclaringType = ModuleDefinition.ImportReference(genericTargetType),
                 HasThis = constructor.HasThis,

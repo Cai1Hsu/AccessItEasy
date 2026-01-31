@@ -130,8 +130,10 @@ public partial class ModuleWeaver
         // If the target type is a generic instance (e.g., List<int>), we need to bind the method to that instance
         if (targetType is GenericInstanceType genericTargetType)
         {
+            var returnType = ModuleDefinition.ImportReference(targetMethod.ReturnType);
+
             // The declaring type should be the generic instance, not the definition
-            var methodRef = new MethodReference(targetMethod.Name, targetMethod.ReturnType)
+            var methodRef = new MethodReference(targetMethod.Name, returnType)
             {
                 DeclaringType = ModuleDefinition.ImportReference(genericTargetType),
                 HasThis = targetMethod.HasThis,
