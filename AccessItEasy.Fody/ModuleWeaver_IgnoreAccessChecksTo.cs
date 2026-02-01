@@ -1,5 +1,7 @@
+using Fody;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using Mono.Cecil.Rocks;
 
 namespace AccessItEasy.Fody;
 
@@ -28,21 +30,30 @@ public partial class ModuleWeaver
         //     public string AssemblyName { get; }
         // }
 
+        // Find Attribute type from referenced assemblies instead of using typeof()
+        var attributeType = FindTypeInReferencedAssemblies("System.Attribute");
+
         // Internal sealed class IgnoresAccessChecksToAttribute : Attribute
         var type = new TypeDefinition(
             "System.Runtime.CompilerServices",
             "IgnoresAccessChecksToAttribute",
             // private auto ansi sealed beforefieldinit
             TypeAttributes.Class | TypeAttributes.NotPublic | TypeAttributes.Sealed | TypeAttributes.AnsiClass | TypeAttributes.BeforeFieldInit,
-            ModuleDefinition.ImportReference(typeof(Attribute)));
+            attributeType);
 
-        var attributeUsageCtor = typeof(AttributeUsageAttribute).GetConstructor(
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
-            null,
-            new[] { typeof(AttributeTargets) },
-            null);
+        // Find AttributeUsageAttribute constructor from referenced assemblies
+        var attributeUsageType = FindTypeDefinitionInAssemblies("System.AttributeUsageAttribute");
+        if (attributeUsageType == null)
+        {
+            throw new WeavingException("Could not find AttributeUsageAttribute in referenced assemblies");
+        }
+        var attributeUsageCtor = attributeUsageType.GetConstructors()
+            .FirstOrDefault(c => c.Parameters.Count == 1);
+        if (attributeUsageCtor == null)
+        {
+            throw new WeavingException("Could not find AttributeUsageAttribute constructor");
+        }
         var attributeUsageCtorRef = ModuleDefinition.ImportReference(attributeUsageCtor);
-        var AttributeTargetsRef = ModuleDefinition.ImportReference(typeof(AttributeTargets));
 
         // AttributeTargets type reference import fails in some cases, so we manually create it
         // [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
@@ -85,15 +96,17 @@ public partial class ModuleWeaver
         var param = new ParameterDefinition("assemblyName", ParameterAttributes.None, ModuleDefinition.TypeSystem.String);
         ctor.Parameters.Add(param);
 
-        // Constructor body
+        // Constructor body - find Attribute constructor from referenced assemblies
         var il = ctor.Body.GetILProcessor();
 
-        var attributeCtor = typeof(Attribute).GetConstructor(
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-        var attributeCtorRef = ModuleDefinition.ImportReference(attributeCtor);
+        var attributeTypeDef = attributeType.Resolve();
+        var attributeBaseCtor = attributeTypeDef.GetConstructors()
+            .FirstOrDefault(c => c.Parameters.Count == 0 && !c.IsStatic);
+        if (attributeBaseCtor == null)
+        {
+            throw new WeavingException("Could not find parameterless constructor for System.Attribute");
+        }
+        var attributeCtorRef = ModuleDefinition.ImportReference(attributeBaseCtor);
 
         il.Append(Instruction.Create(OpCodes.Ldarg_0));
         il.Append(Instruction.Create(OpCodes.Call, attributeCtorRef));

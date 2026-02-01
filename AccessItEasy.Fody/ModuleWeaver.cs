@@ -21,8 +21,7 @@ public partial class ModuleWeaver : BaseModuleWeaver
 
     public override void Execute()
     {
-        compilerGeneratedConstructor = ModuleDefinition.ImportReference(
-            typeof(CompilerGeneratedAttribute).GetConstructor(Type.EmptyTypes));
+        compilerGeneratedConstructor = FindCompilerGeneratedAttributeConstructor();
 
         foreach (var type in ModuleDefinition.Types)
         {
@@ -607,5 +606,40 @@ public partial class ModuleWeaver : BaseModuleWeaver
         yield return "System";
         yield return "System.Runtime";
         yield return "netstandard";
+    }
+
+    /// <summary>
+    /// Finds the CompilerGeneratedAttribute constructor from referenced assemblies
+    /// instead of using typeof() which would get the version from the weaver's runtime.
+    /// </summary>
+    private MethodReference FindCompilerGeneratedAttributeConstructor()
+    {
+        var compilerGeneratedType = FindTypeDefinitionInAssemblies("System.Runtime.CompilerServices.CompilerGeneratedAttribute");
+        if (compilerGeneratedType == null)
+        {
+            throw new WeavingException("Could not find CompilerGeneratedAttribute in referenced assemblies");
+        }
+
+        var ctor = compilerGeneratedType.Methods.FirstOrDefault(m => m.IsConstructor && m.Parameters.Count == 0);
+        if (ctor == null)
+        {
+            throw new WeavingException("Could not find parameterless constructor for CompilerGeneratedAttribute");
+        }
+
+        return ModuleDefinition.ImportReference(ctor);
+    }
+
+    /// <summary>
+    /// Finds a type from referenced assemblies by full name.
+    /// This is used instead of typeof() to avoid version mismatch issues.
+    /// </summary>
+    private TypeReference FindTypeInReferencedAssemblies(string fullTypeName)
+    {
+        var typeDef = FindTypeDefinitionInAssemblies(fullTypeName);
+        if (typeDef == null)
+        {
+            throw new WeavingException($"Could not find type {fullTypeName} in referenced assemblies");
+        }
+        return ModuleDefinition.ImportReference(typeDef);
     }
 }
