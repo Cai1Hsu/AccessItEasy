@@ -50,21 +50,12 @@ public partial class ModuleWeaver
 
         TypeReference targetType = ResolveTargetType(method.Parameters[0]);
 
-        var targetTypeDef = targetType.Resolve();
-        if (targetTypeDef == null)
+        var fieldRef = ResolveFieldReference(targetType, fieldName!);
+        if (fieldRef == null)
         {
-            WriteError($"Could not resolve target type {targetType.FullName}");
+            WriteError($"Could not find field '{fieldName}' in type {targetType.FullName}");
             return;
         }
-
-        var field = FindField(targetTypeDef, fieldName!);
-        if (field == null)
-        {
-            WriteError($"Could not find field '{fieldName}' in type {targetTypeDef.FullName}");
-            return;
-        }
-
-        var fieldRef = ModuleDefinition.ImportReference(field);
 
         // Determine accessor kind
         var kind = DetermineFieldAccessorKind(method);
@@ -240,17 +231,35 @@ public partial class ModuleWeaver
         method.Body.MaxStackSize = GetSafeMaxStackSize(1, method);
     }
 
-    private static FieldDefinition? FindField(TypeDefinition type, string fieldName)
+    private FieldReference? ResolveFieldReference(TypeReference declaringType, string fieldName)
     {
-        var current = type;
-        while (current != null)
-        {
-            var field = current.Fields.FirstOrDefault(f => f.Name == fieldName);
-            if (field != null)
-                return field;
+        var currentRef = declaringType;
+        var currentDef = declaringType.Resolve();
 
-            current = current.BaseType?.Resolve();
+        while (currentRef is not null && currentDef is not null)
+        {
+            var fieldDef = currentDef.Fields.FirstOrDefault(f => f.Name == fieldName);
+
+            if (fieldDef != null)
+                return ImportField(fieldDef, currentDef);
+
+            if (currentDef.BaseType is null)
+                break;
+
+            currentRef = currentDef.BaseType; // FIXME: using definition loses generic arguments
+            currentDef = currentRef?.Resolve();
         }
+
         return null;
+
+        FieldReference ImportField(FieldDefinition field, TypeReference declaringTypeRef)
+        {
+            var fieldTypeRef = ModuleDefinition.ImportReference(field.FieldType);
+            declaringTypeRef = ModuleDefinition.ImportReference(declaringType);
+
+            var fieldRef = new FieldReference(field.Name, fieldTypeRef, declaringTypeRef);
+
+            return ModuleDefinition.ImportReference(fieldRef);
+        }
     }
 }
