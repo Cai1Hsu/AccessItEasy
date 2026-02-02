@@ -518,9 +518,10 @@ public partial class ModuleWeaver : BaseModuleWeaver
                 return il.Create(OpCodes.Ldarg_2);
             case 3:
                 return il.Create(OpCodes.Ldarg_3);
+            case { } when index <= byte.MaxValue:
+                return il.Create(OpCodes.Ldarg_S, (byte)index);
             default:
-                var opCode = index <= byte.MaxValue ? OpCodes.Ldarg_S : OpCodes.Ldarg;
-                return il.Create(opCode, index);
+                return il.Create(OpCodes.Ldarg, index);
         }
     }
 
